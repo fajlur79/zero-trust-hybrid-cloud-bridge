@@ -1,8 +1,8 @@
 resource "aws_vpc" "wg_vpc" {
-  cidr_block        = "10.0.0.0/16"
-  enable_dns_support = true
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_support   = true
   enable_dns_hostnames = true
-  tags = { Name = "WireGuard-VPC"}
+  tags                 = { Name = "WireGuard-VPC" }
 }
 
 resource "aws_internet_gateway" "wg_igw" {
@@ -10,31 +10,31 @@ resource "aws_internet_gateway" "wg_igw" {
 }
 
 resource "aws_subnet" "wg_subnet" {
-  vpc_id = aws_vpc.wg_vpc.id
-  cidr_block = "10.0.1.0/24"
+  vpc_id                  = aws_vpc.wg_vpc.id
+  cidr_block              = "10.0.1.0/24"
   map_public_ip_on_launch = true
 }
 
 resource "aws_route_table" "wg_public_rt" {
   vpc_id = aws_vpc.wg_vpc.id
   route {
-    cidr_block      = "0.0.0.0/0"
-    gateway_id      = aws_internet_gateway.wg_igw.id
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.wg_igw.id
   }
 }
 
 resource "aws_route_table_association" "wg_rt_assoc" {
-    subnet_id = aws_subnet.wg_subnet.id
-    route_table_id = aws_route_table.wg_public_rt.id
+  subnet_id      = aws_subnet.wg_subnet.id
+  route_table_id = aws_route_table.wg_public_rt.id
 
 }
 
 #Security Group 
 
 resource "aws_security_group" "wg_sg" {
-  name = "wireguard-sg"
+  name        = "wireguard-sg"
   description = "Allow Wireguard traffic and SSH traffic"
-  vpc_id = aws_vpc.wg_vpc.id
+  vpc_id      = aws_vpc.wg_vpc.id
 
   ingress {
     from_port   = 51820
@@ -46,7 +46,7 @@ resource "aws_security_group" "wg_sg" {
   egress {
     from_port   = 0
     to_port     = 0
-    protocol = "-1"
+    protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
@@ -58,25 +58,25 @@ resource "aws_eip" "wg_eip" {
 
 
 data "aws_ami" "ubuntu" {
-    most_recent = true
-    owners = ["099720109477"]
+  most_recent = true
+  owners      = ["099720109477"]
 
-    filter {
-      name = "name"
-      values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
-    }
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+  }
 }
 
 resource "aws_instance" "wg_instance" {
   ami           = data.aws_ami.ubuntu.id
   instance_type = "t3.micro"
   subnet_id     = aws_subnet.wg_subnet.id
-  
+
   source_dest_check = false
 
   vpc_security_group_ids = [aws_security_group.wg_sg.id]
 
-  iam_instance_profile   = aws_iam_instance_profile.wg_profile.name
+  iam_instance_profile = aws_iam_instance_profile.wg_profile.name
 
   user_data = <<-EOF
               #!/bin/bash
@@ -115,11 +115,11 @@ resource "aws_instance" "wg_instance" {
 
               EC2_PRIV_KEY="cleared"
               EOF
-  tags = {Name = "WireGuard-Bridge-Router"}
+  tags      = { Name = "WireGuard-Bridge-Router" }
 }
 
 resource "aws_eip_association" "eip_assoc" {
-  instance_id = aws_instance.wg_instance.id
+  instance_id   = aws_instance.wg_instance.id
   allocation_id = aws_eip.wg_eip.id
 }
 
