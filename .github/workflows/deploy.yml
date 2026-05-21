@@ -52,7 +52,7 @@ jobs:
         if: github.event_name == 'push'
         run: |
           # Extract the IP from Terraform output
-          EC2_IP=$(terraform -chdir=infra output -raw iwg_eip)
+          EC2_IP=$(terraform -chdir=infra output -raw wg_eip)
           
           # Telegram Bot API to send a message(eip)
           curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
