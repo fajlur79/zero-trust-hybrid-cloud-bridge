@@ -1,0 +1,74 @@
+name: Zero-Trust Hybrid Cloud Deployment
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  infrastructure-and-deploy:
+    runs-on: ubuntu-latest
+    
+    # Terraform variables 
+    env:
+      TF_VAR_ec2_private_key: ${{ secrets.WG_EC2_PRIVATE_KEY }}
+      TF_VAR_local_public_key: ${{ secrets.WG_LOCAL_PUBLIC_KEY }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      # Initialize the Terraform 
+      - name: Terraform Init
+        working-directory: infra
+        run: terraform init
+
+      # just plan the changes (don't apply them)
+      - name: Terraform Plan (PR Only)
+        if: github.event_name == 'pull_request'
+        working-directory: infra
+        run: terraform plan
+
+      # build the infrastructure
+      - name: Terraform Apply (Push Only)
+        if: github.event_name == 'push'
+        working-directory: infra
+        run: terraform apply -auto-approve
+
+      - name: Send IP to Telegram
+        if: github.event_name == 'push'
+        run: |
+          # Extract the IP from Terraform output
+          EC2_IP=$(terraform -chdir=infra output -raw iwg_eip)
+          
+          # Telegram Bot API to send a message(eip)
+          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
+            -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
+            -d text="✅ Cloud Bridge Deployed!%0A%0AUpdate your local wg0.conf %0A%0AElasticIP:%0A${EC2_IP}"
+
+      # deploy the Python application
+      - name: Deploy monitor.py via AWS SSM
+        if: github.event_name == 'push'
+        run: |
+          echo "Base64 encoding the Python script..."
+          ENCODED_CODE=$(base64 -w 0 cloud-tools/monitor.py)
+          
+          echo "Sending payload via AWS Systems Manager..."
+          aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --targets "Key=tag:Name,Values=WireGuard-Bridge-Router" \
+            --parameters "commands=['echo $ENCODED_CODE | base64 -d > /home/ubuntu/monitor.py', 'chmod +x /home/ubuntu/monitor.py']" \
+            --comment "Deploy NOC monitor script via CI/CD"
