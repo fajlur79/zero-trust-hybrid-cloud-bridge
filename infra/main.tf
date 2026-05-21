@@ -43,13 +43,6 @@ resource "aws_security_group" "wg_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
   egress {
     from_port   = 0
     to_port     = 0
@@ -63,10 +56,6 @@ resource "aws_eip" "wg_eip" {
   domain = "vpc"
 }
 
-resource "aws_key_pair" "debugger" {
-  public_key = file(pathexpand("~/.ssh/aws-sl.pub"))
-  key_name = "aws-sl"
-}
 
 data "aws_ami" "ubuntu" {
     most_recent = true
@@ -86,7 +75,6 @@ resource "aws_instance" "wg_instance" {
   source_dest_check = false
 
   vpc_security_group_ids = [aws_security_group.wg_sg.id]
-  key_name = aws_key_pair.debugger.key_name
 
   iam_instance_profile   = aws_iam_instance_profile.wg_profile.name
 
