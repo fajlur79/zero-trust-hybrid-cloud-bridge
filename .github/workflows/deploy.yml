@@ -31,35 +31,55 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      # Initialize the Terraform 
+      # Initialize Terraform
       - name: Terraform Init
         working-directory: infra
         run: terraform init
 
-      # just plan the changes (don't apply them)
+      # Check Formatting
+      - name: Terraform Format
+        working-directory: infra
+        run: terraform fmt -check
+
+      # Validate Syntax
+      - name: Terraform Validate
+        working-directory: infra
+        run: terraform validate -no-color
+
+      # Security Scan (Trivy)
+      - name: Run Trivy vulnerability scanner in IaC mode
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          hide-progress: false
+          format: 'table'
+          exit-code: '1' 
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+
+      # Plan (PR Only)
       - name: Terraform Plan (PR Only)
         if: github.event_name == 'pull_request'
         working-directory: infra
         run: terraform plan
 
-      # build the infrastructure
+      # Apply (Push Only)
       - name: Terraform Apply (Push Only)
         if: github.event_name == 'push'
         working-directory: infra
         run: terraform apply -auto-approve
 
+      # ChatOps Notification
       - name: Send IP to Telegram
         if: github.event_name == 'push'
         run: |
-          # Extract the IP from Terraform output
-          EC2_IP=$(terraform -chdir=infra output -raw iwg_eip)
+          EC2_IP=$(terraform -chdir=infra output -raw wg_eip)
           
-          # Telegram Bot API to send a message(eip)
           curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
             -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
-            -d text="✅ Cloud Bridge Deployed!%0A%0AUpdate your local wg0.conf %0A%0AElasticIP:%0A${EC2_IP}"
+            -d text="Cloud Bridge Deployed!%0A%0AUpdate your local wg0.conf %0A%0AElasticIP:%0A${EC2_IP}"
 
-      # deploy the Python application
+      # Software Deployment via SSM
       - name: Deploy monitor.py via AWS SSM
         if: github.event_name == 'push'
         run: |
