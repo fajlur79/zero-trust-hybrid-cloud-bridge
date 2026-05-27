@@ -1,3 +1,4 @@
+# trivy:ignore:AVD-AWS-0178 - VPC Flow Logs disabled to prevent unnecessary CloudWatch costs for personal project
 resource "aws_vpc" "wg_vpc" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_support   = true
@@ -10,8 +11,10 @@ resource "aws_internet_gateway" "wg_igw" {
 }
 
 resource "aws_subnet" "wg_subnet" {
-  vpc_id                  = aws_vpc.wg_vpc.id
-  cidr_block              = "10.0.1.0/24"
+  vpc_id     = aws_vpc.wg_vpc.id
+  cidr_block = "10.0.1.0/24"
+
+  # trivy:ignore:AVD-AWS-0164 - Public IP intentionally required for WireGuard endpoint
   map_public_ip_on_launch = true
 }
 
@@ -37,13 +40,16 @@ resource "aws_security_group" "wg_sg" {
   vpc_id      = aws_vpc.wg_vpc.id
 
   ingress {
+    description = "Allow inbound Wireguard UDP traffic"
     from_port   = 51820
     to_port     = 51820
     protocol    = "udp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # trivy:ignore:AVD-AWS-0104 - WireGuard router requires unrestricted outbound internet access
   egress {
+    description = "Allow all outbound traffic for internet routing"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -71,6 +77,15 @@ resource "aws_instance" "wg_instance" {
   ami           = data.aws_ami.ubuntu.id
   instance_type = "t3.micro"
   subnet_id     = aws_subnet.wg_subnet.id
+
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens   = "required"
+  }
+
+  root_block_device {
+    encrypted = true
+  }
 
   source_dest_check = false
 
