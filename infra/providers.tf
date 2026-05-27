@@ -5,6 +5,12 @@ terraform {
       version = "~>6.0"
     }
   }
+
+  backend "s3" {
+    bucket = "ha-cloud-bridge-tfstate-99887"
+    key    = "prod/terraform.tfstate"
+    region = "ap-south-1"
+  }
 }
 
 provider "aws" {
